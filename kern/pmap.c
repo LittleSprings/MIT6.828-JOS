@@ -156,6 +156,9 @@ mem_init(void)
 	// memory management will go through the page_* functions. In
 	// particular, we can now map memory using boot_map_region
 	// or page_insert
+	// 现在我们已经分配了初始内核数据结构，我们设置了空闲物理页面列表。
+	// 一旦我们这样做了，所有进一步的内存管理将通过 page_* 函数。
+	// 特别是，我们现在可以使用 boot_map_region 或 page_insert 映射内存
 	page_init();
 
 	check_page_free_list(1);
