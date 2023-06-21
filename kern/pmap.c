@@ -69,6 +69,8 @@ static physaddr_t check_va2pa(pde_t *pgdir, uintptr_t va);
 static void check_page(void);
 static void check_page_installed_pgdir(void);
 
+// 申请到n个字节的内存，由于以页为粒度管理内存，因此取得（n-1）/PGSIZE+1个页的内存，返回首地址
+// 这些内存并不一定是连续的，而是以一个链表的形式存储，因此可能是连续的也可能是非连续的。
 // This simple physical memory allocator is used only while JOS is setting
 // up its virtual memory system.  page_alloc() is the real allocator.
 //
@@ -252,7 +254,11 @@ mem_init(void)
 // Pages are reference counted, and free pages are kept on a linked list.
 // --------------------------------------------------------------
 
-//
+// 根据内存分布，找出系统最开始状态为空闲的页，并全部加入page_free_list数组中，
+// 所有内存分为base memory和extend memory，基地址第一页归系统所有，不能作为空闲页，
+// 然后用boot_alloc（）函数去申请0字节的内存，就可以得到extend memory的空闲首地址，
+// 由于kernal地址到物理地址是线性映射，只需要减去KERNBASE即可。
+// 循环过程中page_free_list的地址逐渐升高，相当于page_free_list指向高地址
 // Initialize page structure and memory free list.
 // After this is done, NEVER use boot_alloc again.  ONLY use the page
 // allocator functions below to allocate and deallocate physical
@@ -303,15 +309,13 @@ page_init(void)
 	// cprintf("the size of page_free_list is %d\n", sizeof(page_free_list));
 }
 
-//
+// 分配物理页，如果允许分配（有剩余内存），返回page_free_list中一个struct，并且根据标志将该页内容设为0
 // Allocates a physical page.  If (alloc_flags & ALLOC_ZERO), fills the entire
 // returned physical page with '\0' bytes.  Does NOT increment the reference
 // count of the page - the caller must do these if necessary (either explicitly
 // or via page_insert).
 // 分配物理页。如果 (alloc_flags & ALLOC_ZERO)，用'\0'字节填充整个返回的物理页。
 // 不增加页面的引用计数 - 调用者必须在必要时执行这些操作（显式或通过 page_insert）。
-
-
 // Be sure to set the pp_link field of the allocated page to NULL so
 // page_free can check for double-free bugs.
 // 请务必将分配页面的 pp_link 字段设置为 NULL，以便 page_free 可以检查双重释放错误。
@@ -362,6 +366,9 @@ page_decref(struct PageInfo* pp)
 		page_free(pp);
 }
 
+// 返回的是一个页表项指针，如果查询页目录（顶级页表）发现一级页表（本质是一个页，里面存了1024个页表项）不存在，
+// 则创建一个新的页，并把该页对应的的PageInfo::pp_ref++，然后通过page2pa将PageInfo转换为物理地址，并设置一些位值
+// 物理地址指的是该页的首地址，也就是一个一级页表，可以通过PTX(va)来访问
 // Given 'pgdir', a pointer to a page directory, pgdir_walk returns
 // a pointer to the page table entry (PTE) for linear address 'va'.
 // This requires walking the two-level page table structure.
@@ -438,7 +445,7 @@ boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm
 
 }
 
-//
+// 将虚拟地址得到的pte映射到物理页，并置位，如果该pte原先已经被映射到物理页，则先移除该映射
 // Map the physical page 'pp' at virtual address 'va'.
 // The permissions (the low 12 bits) of the page table entry
 // should be set to 'perm|PTE_P'.
@@ -485,7 +492,7 @@ page_insert(pde_t *pgdir, struct PageInfo *pp, void *va, int perm)
 	return 0;
 }
 
-//
+// 根据虚拟地址查看页目录中的pte是否有效，有效则返回该pte对应的struct PageInfo *，无效返回NULL
 // Return the page mapped at virtual address 'va'.
 // If pte_store is not zero, then we store in it the address
 // of the pte for this page.  This is used by page_remove and
@@ -512,7 +519,8 @@ page_lookup(pde_t *pgdir, void *va, pte_t **pte_store)
 	// return pa2page(pte);
 }
 
-//
+// 将该虚拟地址从TLB中删除，如果物理页面不再被任何pte关联，释放物理页
+// 移除虚拟地址对应的pte与物理页面的映射，删除struct PageInfo *节点
 // Unmaps the physical page at virtual address 'va'.
 // If there is no physical page at that address, silently does nothing.
 //
