@@ -174,6 +174,9 @@ mem_init(void)
 	//////////////////////////////////////////////////////////////////////
 	// Make 'envs' point to an array of size 'NENV' of 'struct Env'.
 	// LAB 3: Your code here.
+	size_t sizes = sizeof(struct Env) * NENV;
+	envs = (struct Env*)boot_alloc(sizes);
+	memset(envs, 0, sizes);
 
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
@@ -210,6 +213,7 @@ mem_init(void)
 	//    - the new image at UENVS  -- kernel R, user R
 	//    - envs itself -- kernel RW, user NONE
 	// LAB 3: Your code here.
+	boot_map_region(kern_pgdir, UENVS, PTSIZE, PADDR(envs), PTE_U|PTE_P);
 
 	//////////////////////////////////////////////////////////////////////
 	// Use the physical memory that 'bootstack' refers to as the kernel
@@ -349,6 +353,7 @@ page_alloc(int alloc_flags)
 			memset(page2kva(tem), '\0', PGSIZE);
 		return tem;
 	}
+	// cprintf("page_alloc error\n");
 	return NULL;
 }
 
@@ -600,6 +605,21 @@ int
 user_mem_check(struct Env *env, const void *va, size_t len, int perm)
 {
 	// LAB 3: Your code here.
+	
+	uint32_t start = (uint32_t)ROUNDDOWN(va, PGSIZE);
+	uint32_t end = (uint32_t)ROUNDUP(va+len, PGSIZE);
+	for (uint32_t i = start; i < end; i += PGSIZE) {
+		// struct PageInfo* p;
+		// p = page_lookup(env->env_pgdir, (void*)i, NULL);
+		pte_t *pte = pgdir_walk(env->env_pgdir, (void*)i, 0);
+		if (i > ULIM || pte == NULL || (*pte & perm) != perm){
+			if(i == start) 
+				user_mem_check_addr = (uint32_t)va;
+			else 
+				user_mem_check_addr = i;
+			return -E_FAULT;
+		}
+	}
 
 	return 0;
 }
