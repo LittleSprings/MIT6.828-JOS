@@ -145,6 +145,7 @@ mem_init(void)
 	// create initial page directory.
 	kern_pgdir = (pde_t *) boot_alloc(PGSIZE);
 	memset(kern_pgdir, 0, PGSIZE);
+	cprintf("kern_pgdir = %x\n", kern_pgdir);
 	// panic("mem_init: This function is not finished\n");
 	//////////////////////////////////////////////////////////////////////
 	// Recursively insert PD in itself as a page table, to form
