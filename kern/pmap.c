@@ -167,7 +167,7 @@ mem_init(void)
 	// Your code goes here:
 	// cprintf("npages is %d\n",npages);
 	pages = (struct PageInfo *) boot_alloc(sizeof(struct PageInfo)*npages);
-	cprintf("pages = %8x\n", pages);
+	//cprintf("pages = %8x\n", pages);
 	memset(pages, 0, sizeof(struct PageInfo)*npages);
 
 
