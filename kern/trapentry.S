@@ -69,6 +69,12 @@ TRAPHANDLER_NOEC(t_simderr, T_SIMDERR)
 
 TRAPHANDLER_NOEC(t_syscall, T_SYSCALL)
 
+TRAPHANDLER_NOEC(timer_handler, IRQ_OFFSET + IRQ_TIMER);
+TRAPHANDLER_NOEC(kbd_handler, IRQ_OFFSET + IRQ_KBD);
+TRAPHANDLER_NOEC(serial_handler, IRQ_OFFSET + IRQ_SERIAL);
+TRAPHANDLER_NOEC(spurious_handler, IRQ_OFFSET + IRQ_SPURIOUS);
+TRAPHANDLER_NOEC(ide_handler, IRQ_OFFSET + IRQ_IDE);
+TRAPHANDLER_NOEC(error_handler, IRQ_OFFSET + IRQ_ERROR);
 
 /*
  * Lab 3: Your code here for _alltraps

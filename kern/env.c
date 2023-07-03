@@ -160,19 +160,19 @@ env_init(void)
 	//上面分析过 要从0 开始，所以我们倒着遍历。
 
 	// env_free_list=NULL;
-	// for	(int i=NENV-1;i>=0;i--){
-	// 	// cprintf("%d\n", i);
-	// 	envs[i].env_id=0;
-	// 	envs[i].env_status=ENV_FREE;
-	// 	envs[i].env_link=env_free_list;
-	// 	env_free_list=&envs[i];
-	// }
-
-	env_free_list = envs;
-	for (int i = 0; i < NENV; i++) {
+	for	(int i=NENV-1;i>=0;i--){
+		// cprintf("%d\n", i);
 		envs[i].env_id=0;
-		if (i < NENV-1) envs[i].env_link=envs+i;
+		envs[i].env_status=ENV_FREE;
+		envs[i].env_link=env_free_list;
+		env_free_list=&envs[i];
 	}
+
+	// env_free_list = envs;
+	// for (int i = 0; i < NENV; i++) {
+	// 	envs[i].env_id=0;
+	// 	if (i < NENV-1) envs[i].env_link=envs+i;
+	// }
 
 	// Per-CPU part of the initialization
 	env_init_percpu();
@@ -307,6 +307,7 @@ env_alloc(struct Env **newenv_store, envid_t parent_id)
 
 	// Enable interrupts while in user mode.
 	// LAB 4: Your code here.
+	// e->env_tf.tf_eflags |= FL_IF;
 
 	// Clear the page fault handler until user installs one.
 	e->env_pgfault_upcall = 0;
@@ -658,6 +659,7 @@ env_run(struct Env *e)
 	e->env_status = ENV_RUNNING;
 	e->env_runs++;
 	lcr3(PADDR(e->env_pgdir));
+	unlock_kernel();
     //保存环境
 	env_pop_tf(&e->env_tf);
 
