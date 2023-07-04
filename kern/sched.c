@@ -29,22 +29,31 @@ sched_yield(void)
 	// below to halt the cpu.
 
 	// LAB 4: Your code here.
-	struct Env *now = thiscpu->cpu_env;
-	int32_t startid = (now) ? ENVX(now->env_id): 0;
+	// struct Env *now = thiscpu->cpu_env;
+	size_t startid = 0;
+	if (curenv) {
+		startid = ENVX(curenv->env_id) + 1;
+	}
+	// cprintf("startid = %x\n", startid);
+	// if (ENVX(curenv->env_id) == 0) cprintf("parent*****************\n"); 
+	// if (ENVX(curenv->env_id) == 1) cprintf("child*****************\n");
+	// cprintf("envs[0].env_status = %d, envs[1].env_status = %d\n", envs[0].env_status, envs[1].env_status);
 	int32_t nextid;
 	size_t i;
 	// 当前没有任何环境执行,应该从0开始查找
 	for(i = 0; i < NENV; i++) {
 		nextid = (startid+i)%NENV;
 		if(envs[nextid].env_status == ENV_RUNNABLE) {
+				// cprintf("nextid = %d\n", nextid);
 				env_run(&envs[nextid]);
 				return;
 			}
 	}
 
 	// 循环一圈后，没有可执行的环境
-	if(envs[startid].env_status == ENV_RUNNING && envs[startid].env_cpunum == cpunum()) {
-		env_run(&envs[startid]);
+	if(curenv && curenv->env_status == ENV_RUNNING) {
+		// cprintf("**********************\n");
+		env_run(curenv);
 	}
 	// sched_halt never returns
 	sched_halt();
@@ -91,7 +100,7 @@ sched_halt(void)
 		"pushl $0\n"
 		"pushl $0\n"
 		// Uncomment the following line after completing exercise 13
-		//"sti\n"
+		"sti\n"
 		"1:\n"
 		"hlt\n"
 		"jmp 1b\n"
