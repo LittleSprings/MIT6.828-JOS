@@ -114,15 +114,70 @@ envid2env(envid_t envid, struct Env **env_store, bool checkperm)
 // they are in the envs array (i.e., so that the first call to
 // env_alloc() returns envs[0]).
 //
+// void
+// env_init(void)
+// {
+// 	// Set up envs array
+// 	// LAB 3: Your code here.
+// 	size_t i;
+// 	env_free_list = envs;
+// 	for (i = 0; i < NENV; i++) {
+// 		envs[i].env_id = 0;
+// 		if (i < NENV-1) 
+// 			envs[i].env_link = envs+i+1;
+// 	}
+// 	// for (i = NENV-1; i >= 0; i--) {
+// 	// 	envs[i].env_id = 0;
+// 	// 	envs[i].env_link = env_free_list;
+// 	// 	env_free_list = &envs[i];
+// 	// }
+// 	// Per-CPU part of the initialization
+// 	env_init_percpu();
+// }
+// void
+// env_init(void)
+// {
+// 	// Set up envs array
+// 	// LAB 3: Your code here.
+// 	size_t i = 0;
+// 	for (; i < NENV; i++) {
+// 		envs[i].env_id = 0;
+// 		// ATTENTION: must tail insert 
+// 		if (i == 0) {
+// 			env_free_list = &envs[0];
+// 		} else {
+// 			env_free_list->env_link = &envs[i];
+// 		}
+// 	}
+// 	// Per-CPU part of the initialization
+// 	env_init_percpu();
+// }
 void
 env_init(void)
 {
 	// Set up envs array
 	// LAB 3: Your code here.
+	//上面分析过 要从0 开始，所以我们倒着遍历。
+
+	// env_free_list=NULL;
+	for	(int i=NENV-1;i>=0;i--){
+		// cprintf("%d\n", i);
+		envs[i].env_id=0;
+		envs[i].env_status=ENV_FREE;
+		envs[i].env_link=env_free_list;
+		env_free_list=&envs[i];
+	}
+
+	// env_free_list = envs;
+	// for (int i = 0; i < NENV; i++) {
+	// 	envs[i].env_id=0;
+	// 	if (i < NENV-1) envs[i].env_link=envs+i;
+	// }
 
 	// Per-CPU part of the initialization
 	env_init_percpu();
 }
+
 
 // Load GDT and segment descriptors.
 void
@@ -182,6 +237,11 @@ env_setup_vm(struct Env *e)
 	//    - The functions in kern/pmap.h are handy.
 
 	// LAB 3: Your code here.
+	p->pp_ref++;
+	e->env_pgdir=(pde_t *)page2kva(p);
+	// pte_t *env_pgdir0 = page2kva(p);
+	// cprintf("test err\n");
+	memcpy(e->env_pgdir, kern_pgdir, PGSIZE);
 
 	// UVPT maps the env's own page table read-only.
 	// Permissions: kernel R, user R
@@ -247,6 +307,7 @@ env_alloc(struct Env **newenv_store, envid_t parent_id)
 
 	// Enable interrupts while in user mode.
 	// LAB 4: Your code here.
+	e->env_tf.tf_eflags |= FL_IF;
 
 	// Clear the page fault handler until user installs one.
 	e->env_pgfault_upcall = 0;
@@ -279,6 +340,34 @@ region_alloc(struct Env *e, void *va, size_t len)
 	//   'va' and 'len' values that are not page-aligned.
 	//   You should round va down, and round (va + len) up.
 	//   (Watch out for corner-cases!)
+
+	struct PageInfo *p;
+	uint32_t i;
+	for (i = (uint32_t)ROUNDDOWN(va, PGSIZE); i < (uint32_t)ROUNDUP(va+len, PGSIZE); i+=PGSIZE) {
+		p = page_alloc(0);
+		if (p == NULL) 
+			panic("there is no memory\n");
+		else
+			if (page_insert(e->env_pgdir, p, (void*)i, (PTE_P | PTE_W | PTE_U))!=0) 
+				panic("region_alloc map err\n");
+	}
+
+	// void *start=ROUNDDOWN(va,PGSIZE),*end=ROUNDUP(va+len,PGSIZE);
+	// for (void * addr=start;addr<end;addr+=PGSIZE){
+	// 	struct PageInfo* p=page_alloc(0);
+	// 	if(p==NULL){
+	// 		panic("region alloc failed: No more page to be allocated.\n");
+	// 	}
+	// 	else {
+	// 		// cprintf("page_insert = %d\n", page_insert(e->env_pgdir,p,addr, PTE_U | PTE_W));
+	// 		// page_insert(e->env_pgdir,p,addr, PTE_U | PTE_W);
+	// 		if((page_insert(e->env_pgdir,p,addr, PTE_U | PTE_W))!=0){
+	// 			panic("region alloc failed: page table couldn't be allocated.\n");
+	// 		}
+	// 	}
+	// }
+
+
 }
 
 //
@@ -317,6 +406,73 @@ load_icode(struct Env *e, uint8_t *binary)
 	//  ph->p_va.  Any remaining memory bytes should be cleared to zero.
 	//  (The ELF header should have ph->p_filesz <= ph->p_memsz.)
 	//  Use functions from the previous lab to allocate and map pages.
+
+	// struct Proghdr *ph,*end_ph;
+	// struct Elf * elf_header = (struct Elf*)binary;
+	// if(elf_header->e_magic!=ELF_MAGIC){
+	// 	panic("not a elf format file");
+	// }
+	// ph=(struct Proghdr*)((uint8_t*)elf_header+elf_header->e_phoff);
+	// end_ph=ph+elf_header->e_phnum;
+	// lcr3(PADDR(e->env_pgdir));
+	// for(;ph<end_ph;ph++){
+	// 	if(ph->p_type==ELF_PROG_LOAD){
+	// 		if(ph->p_memsz-ph->p_filesz<0){
+	// 			panic("p_memsz < p_filesz");
+	// 		}
+	// 		region_alloc(e,(void*)ph->p_va,ph->p_memsz);
+	// 		memcpy((void*)ph->p_va,(void*)binary+ph->p_offset,ph->p_filesz);
+	// 		memset((void*)(ph->p_va+ph->p_filesz),0,ph->p_memsz-ph->p_filesz);
+	// 	}
+	// }
+	// e->env_tf.tf_eip=elf_header->e_entry;
+	// region_alloc(e,(void*)(USTACKTOP-PGSIZE),PGSIZE);
+	// lcr3(PADDR(kern_pgdir));
+	// cprintf("done----------------------------------]\n");
+
+	struct Proghdr *ph, *eph;
+	int j = 0;
+	struct Elf * ELF=(struct Elf *)binary;
+	if (ELF->e_magic != ELF_MAGIC)panic("The loaded file is not ELF format!\n");
+	// cprintf("ph = %e\n", ph);
+	ph = (struct Proghdr *) (binary + ELF->e_phoff);
+	// cprintf("ph = %x\n", ph);
+	eph = ph + ELF->e_phnum;
+	// cprintf("ELF->e_phnum = %x\n", ELF->e_phnum);
+	// cprintf("eph = %x\n", eph);
+	//装载 用户目录
+	lcr3(PADDR(e->env_pgdir));
+
+
+	// for (j = 0; j < 1; j++) {
+	// 	cprintf("j = %d\n", j);
+	// 	cprintf("eph = %8x\n", eph);
+	// 	cprintf("ELF->e_phnum = %d\n", ELF->e_phnum);
+	// 	cprintf("ELF->e_phoff = %d\n", ELF->e_phoff);
+	// 	cprintf("binary = %8x\n", binary);
+	// 	cprintf("diff = %d\n", eph-ph);
+	// }
+
+	// //第二部应该是加载段到内存
+	for(; ph < eph; ph++){
+		//加载条件是  ph->p_type == ELF_PROG_LOAD，地址是 ph->p_va 大小ph->p_memsz
+		if(ph->p_type == ELF_PROG_LOAD){
+			if (ph->p_filesz > ph->p_memsz)
+                panic("load_icode failed: p_memsz < p_filesz.\n");
+			// cprintf("ph->p_va = %x\n", ph->p_va);
+			// cprintf("ph->p_memsz = %x\n", ph->p_memsz);
+			region_alloc(e, (void*)ph->p_va,ph->p_memsz);
+			// cprintf("ph->p_va = %x\n", ph->p_va);
+			// cprintf("-----------------------------\n");
+			//复制ph->p_filesz bytes ，其他的补0
+			memset((void*)ph->p_va,0,ph->p_memsz);
+			// cprintf("*********************\n");
+			memcpy((void*)ph->p_va,(void*)(binary + ph->p_offset),ph->p_filesz);
+		}
+	}
+	e->env_tf.tf_eip=ELF->e_entry;
+	region_alloc(e,(void*)(USTACKTOP-PGSIZE),PGSIZE);
+	lcr3(PADDR(kern_pgdir));
 	//
 	//  All page protection bits should be user read/write for now.
 	//  ELF segments are not necessarily page-aligned, but you can
@@ -353,6 +509,19 @@ void
 env_create(uint8_t *binary, enum EnvType type)
 {
 	// LAB 3: Your code here.
+	struct Env * e;
+	int r = 0;
+	// cprintf("env_create: %d\n", r);
+	r = env_alloc(&e, 0);
+	// cprintf("env_create: %d\n", r);
+	if(r != 0){
+		cprintf("env_create: %e\n", r);
+		panic("env_create:error");
+	}
+	e->env_type = type;
+	// 到这里没问题
+	load_icode(e, binary);
+	
 
 	// If this is the file server (type == ENV_TYPE_FS) give it I/O privileges.
 	// LAB 5: Your code here.
@@ -486,6 +655,18 @@ env_run(struct Env *e)
 	//	e->env_tf to sensible values.
 
 	// LAB 3: Your code here.
+	// cprintf("envs[0].env_status = %d, envs[1].env_status = %d\n", envs[0].env_status, envs[1].env_status);
+	if((curenv != NULL) && curenv->env_status == ENV_RUNNING){
+		// cprintf("curenv->env_id = %d\n", curenv->env_id);
+		curenv->env_status = ENV_RUNNABLE;
+	}
+	curenv = e;
+	e->env_status = ENV_RUNNING;
+	e->env_runs++;
+	lcr3(PADDR(e->env_pgdir));
+	unlock_kernel();
+    //保存环境
+	env_pop_tf(&e->env_tf);
 
 	panic("env_run not yet implemented");
 }

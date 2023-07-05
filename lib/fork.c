@@ -7,6 +7,9 @@
 // It is one of the bits explicitly allocated to user processes (PTE_AVAIL).
 #define PTE_COW		0x800
 
+extern volatile pte_t uvpt[];     // VA of "virtual page table"
+extern volatile pde_t uvpd[];     // VA of current page directory
+
 //
 // Custom page fault handler - if faulting page is copy-on-write,
 // map in our own private writable copy.
@@ -33,8 +36,27 @@ pgfault(struct UTrapframe *utf)
 	//   You should make three system calls.
 
 	// LAB 4: Your code here.
+	if ( !((err & FEC_WR) && (uvpd[PDX(addr)] & PTE_P) &&  (uvpt[PGNUM(addr)] & PTE_P) && (uvpt[PGNUM(addr)] & PTE_COW))) {
+		panic("must be above reason");
+	}
+	// LAB 4: Your code here.
+	if ((r = sys_page_alloc(0,PFTEMP,PTE_W | PTE_U | PTE_P) < 0)) {
+		panic("alloc map error, error nubmer is %d\n",r);
+	}
+	// addr pgsize assign
+	addr = ROUNDDOWN(addr, PGSIZE);
+	memcpy((void *)PFTEMP,addr,PGSIZE);
+	// 
+	r = sys_page_map(0,(void *)PFTEMP,0,addr,PTE_W | PTE_U | PTE_P);
+	if (r < 0) {
+		panic("sysmap error");
+	}
+	r = sys_page_unmap(0,(void *) PFTEMP);
+	if (r < 0) {
+		panic("page_unmap error");
+	}
 
-	panic("pgfault not implemented");
+	// panic("pgfault not implemented");
 }
 
 //
@@ -54,7 +76,23 @@ duppage(envid_t envid, unsigned pn)
 	int r;
 
 	// LAB 4: Your code here.
-	panic("duppage not implemented");
+	// panic("duppage not implemented");
+	void * va = (void *)(pn * PGSIZE);
+	if ( (uvpt[pn] & PTE_W) || (uvpt[pn] & PTE_COW)) {
+		r = sys_page_map(0, va, envid, va, PTE_COW | PTE_P | PTE_U);
+		if (r < 0)  {
+			return r;
+		}
+		r = sys_page_map(0,va, 0,va, PTE_U | PTE_COW | PTE_P);
+		if (r < 0) {
+			return r;
+		}
+	} else  {
+		r = sys_page_map(0,va,envid,va, PTE_P | PTE_U);
+		if (r < 0) {
+			return r;
+		}
+	}
 	return 0;
 }
 
@@ -78,7 +116,36 @@ envid_t
 fork(void)
 {
 	// LAB 4: Your code here.
-	panic("fork not implemented");
+	// panic("fork not implemented");
+	envid_t envid;
+	int r;
+	unsigned pn;
+	set_pgfault_handler(pgfault);
+	envid = sys_exofork();
+	if (envid < 0) {
+		panic("sys_exofork: %e", envid);
+	}
+	if (envid == 0) {
+		// we are children
+		thisenv = &envs[ENVX(sys_getenvid())];
+		return 0;
+	}
+	// for parent
+	for (pn=PGNUM(UTEXT); pn<PGNUM(USTACKTOP); pn++){ 
+            if ((uvpd[pn >> 10] & PTE_P) && (uvpt[pn] & PTE_P))
+                if ((r =  duppage(envid, pn)) < 0)
+                    return r;
+	}
+	if ((r = sys_page_alloc(envid,(void *) (UXSTACKTOP - PGSIZE), (PTE_U | PTE_P | PTE_W))) < 0) {
+		 panic("error");
+	}
+	extern void _pgfault_upcall(void); //缺页处理
+	if((r = sys_env_set_pgfault_upcall(envid, _pgfault_upcall)) < 0){
+			panic("sys_set_pgfault_upcall:%e", r);
+	}
+	if ((r = sys_env_set_status(envid, ENV_RUNNABLE)) < 0)//设置成可运行
+            return r;
+	return envid; 
 }
 
 // Challenge!
