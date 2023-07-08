@@ -102,10 +102,14 @@ umain(int argc, char **argv)
 	if ((f = open("/big", O_WRONLY|O_CREAT)) < 0)
 		panic("creat /big: %e", f);
 	memset(buf, 0, sizeof(buf));
+	// cprintf("(NDIRECT*3)*BLKSIZE = %d", (NDIRECT*3)*BLKSIZE/512);
 	for (i = 0; i < (NDIRECT*3)*BLKSIZE; i += sizeof(buf)) {
 		*(int*)buf = i;
+		// r = write(f, buf, sizeof(buf));
+		// cprintf("r = %d\n", r);
 		if ((r = write(f, buf, sizeof(buf))) < 0)
 			panic("write /big@%d: %e", i, r);
+		// cprintf("%d\n", i/512);
 	}
 	close(f);
 

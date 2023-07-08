@@ -78,7 +78,10 @@ duppage(envid_t envid, unsigned pn)
 	// LAB 4: Your code here.
 	// panic("duppage not implemented");
 	void * va = (void *)(pn * PGSIZE);
-	if ( (uvpt[pn] & PTE_W) || (uvpt[pn] & PTE_COW)) {
+	if (uvpt[pn] & PTE_SHARE) {
+		if((r = sys_page_map(thisenv->env_id, (void *) va, envid, (void * )va, uvpt[pn] & PTE_SYSCALL)) <0 ) 
+			return r;
+	} else if ( (uvpt[pn] & PTE_W) || (uvpt[pn] & PTE_COW)) {
 		r = sys_page_map(0, va, envid, va, PTE_COW | PTE_P | PTE_U);
 		if (r < 0)  {
 			return r;
