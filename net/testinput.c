@@ -96,13 +96,13 @@ umain(int argc, char **argv)
 		int perm;
 
 		int32_t req = ipc_recv((int32_t *)&whom, pkt, &perm);
+		printf("req = %d**********\n", req);
 		if (req < 0)
 			panic("ipc_recv: %e", req);
 		if (whom != input_envid)
 			panic("IPC from unexpected environment %08x", whom);
 		if (req != NSREQ_INPUT)
 			panic("Unexpected IPC %d", req);
-
 		hexdump("input: ", pkt->jp_data, pkt->jp_len);
 		cprintf("\n");
 

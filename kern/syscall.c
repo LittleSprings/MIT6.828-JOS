@@ -13,6 +13,8 @@
 #include <kern/sched.h>
 #include <kern/time.h>
 
+#include <kern/e1000.h>
+
 // Print a string to the system console.
 // The string is exactly 'len' characters long.
 // Destroys the environment on memory errors.
@@ -429,7 +431,18 @@ static int
 sys_time_msec(void)
 {
 	// LAB 6: Your code here.
-	panic("sys_time_msec not implemented");
+	return time_msec();
+	// panic("sys_time_msec not implemented");
+}
+
+static int
+sys_packet_try_send(void *addr, uint32_t len){
+   return e1000_transmit(addr, len);
+}
+
+static int
+sys_packet_receive(void *addr, uint32_t len){
+   return e1000_receive(addr, len);
 }
 
 // Dispatches to the correct kernel function, passing the arguments.
@@ -477,6 +490,12 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 			return sys_ipc_recv((void *) a1);
 		case SYS_env_set_trapframe:
 			return sys_env_set_trapframe((envid_t) a1, (struct Trapframe*) a2);
+		case SYS_time_msec:
+			return sys_time_msec();
+		case SYS_packet_try_send:
+			return sys_packet_try_send((void *) a1, (uint32_t) a2);
+		case SYS_packet_receive:
+			return sys_packet_receive((void *) a1, (uint32_t) a2);
         default:
             return -E_INVAL;
 	}

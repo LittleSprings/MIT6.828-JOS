@@ -315,6 +315,7 @@ void
 umain(int argc, char **argv)
 {
 	envid_t ns_envid = sys_getenvid();
+	cprintf("*******************\n");
 
 	binaryname = "ns";
 

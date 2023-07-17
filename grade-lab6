@@ -132,24 +132,30 @@ end_part("A")
 def test_testinput_helper(count):
     save_pcap_on_fail()
     maybe_unlink("qemu.pcap")
-
+    print("***1\n")
     def send_packets():
         # Send 'count' UDP packets
+        print("***\n")
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        print("***4\n")
         sock.connect(("127.0.0.1", echo_port))
+        print("***5\n")
         for i in range(count):
-            sock.send(ascii_to_bytes("Packet %03d" % i))
+            print("***\n")
+            sent_bytes = sock.send(ascii_to_bytes("Packet %03d" % i))
+            print(sent_bytes == len(ascii_to_bytes("Packet %03d" % i)))
     send_thread = threading.Thread(target=send_packets)
-
+    print("***2\n")
     # When we see the final packet, we can stop QEMU
     digits = "%03d" % (count-1)
     final = "input: 0030   203%s 3%s3%s" % tuple("%03d" % (count-1))
-
+    send_thread.start()
     r.user_test("net_testinput",
                 call_on_line("Waiting for packets",
                               lambda _: send_thread.start()),
                 stop_on_line(final))
-    if send_thread.isAlive():
+    print("***3\n")
+    if send_thread.is_alive():
         send_thread.join()
 
     # Parse testinput hexdumps for received packets
